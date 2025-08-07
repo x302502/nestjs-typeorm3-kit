@@ -1,6 +1,6 @@
 {
   "name": "nestjs-typeorm3-kit",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "NestJS utilities for TypeORM v0.3+",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
