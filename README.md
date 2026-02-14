@@ -236,6 +236,10 @@ bootstrap();
 
 [Example](./example)
 
+#### Agent skill (create NestJS project)
+
+[Create NestJS project with nestjs-typeorm3-kit](./.github/skills/create-nestjs-typeorm3-kit/SKILL.md)
+
 ### Full document in wiki github
 
 [FULL DOCUMENT](https://x302502.github.io/nestjs-typeorm3-kit/)
