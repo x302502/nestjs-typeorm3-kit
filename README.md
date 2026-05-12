@@ -4,14 +4,17 @@
 
 A toolkit for [NestJS](https://nestjs.com/) + [TypeORM](https://typeorm.io) **0.3+** that brings back the ergonomic `@EntityRepository` pattern that TypeORM 0.3 removed, plus transactional, Swagger, and controller helpers.
 
+This package is also a **wrapper fork of [`typeorm-transactional`](https://github.com/Aliheym/typeorm-transactional) `v0.5.0`**. Since v0.2.0 the transactional layer is vendored inside the package (see [`src/vendor/transactional/`](./src/vendor/transactional)) with `cls-hooked` removed, so transactions work on both Node.js (>= 16.4) and Bun out of the box — without requiring a separate `typeorm-transactional` install.
+
 - ✅ `@DefEntityRepository` — the closest thing to TypeORM 0.2's `@EntityRepository`
 - ✅ `@InjectRepo` with **multi-DataSource** support out of the box
-- ✅ `@DefTransaction` — decorator-based transactions (wraps `typeorm-transactional`)
+- ✅ `@DefTransaction` — decorator-based transactions (wraps the vendored `typeorm-transactional`)
 - ✅ `RepositoryWrapper` — hardens `findOne` against TypeORM's "first row on undefined where" footgun
 - ✅ `@DefController`, `@DefGet/Post/Put/Patch/Delete` — less boilerplate, auto Swagger response metadata
 - ✅ `@ChildModule` — nested route prefixes + auto `ApiTags`
 - ✅ `configSwaggerDocument` — merges `class-validator` metadata into the OpenAPI doc
 - ✅ `lazyLoadClasses` — auto-discover controllers/services by file suffix
+- ✅ **Bun-friendly** — vendored transactional layer uses `AsyncLocalStorage` only, no `cls-hooked`
 
 ---
 
@@ -19,42 +22,52 @@ A toolkit for [NestJS](https://nestjs.com/) + [TypeORM](https://typeorm.io) **0.
 
 1. [Installation](#installation)
 2. [Quick start](#quick-start)
-3. [Repository API](#repository-api)
+3. [Relationship to `typeorm-transactional`](#relationship-to-typeorm-transactional)
+4. [Repository API](#repository-api)
    - [`@DefEntityRepository`](#defentityrepository)
    - [`DefRepositoryModule`](#defrepositorymodule)
    - [`@InjectRepo`](#injectrepo)
    - [`RepositoryWrapper`](#repositorywrapper)
-4. [Transactions](#transactions)
+5. [Transactions](#transactions)
    - [`setupTransactionContext`](#setuptransactioncontext)
    - [`@DefTransaction`](#deftransaction)
-5. [Controller & module helpers](#controller--module-helpers)
+6. [Controller & module helpers](#controller--module-helpers)
    - [`@DefController` and method decorators](#defcontroller-and-method-decorators)
    - [`@ChildModule`](#childmodule)
-6. [Swagger helper](#swagger-helper)
-7. [Validation decorators](#validation-decorators)
-8. [Utilities](#utilities)
-9. [Full example](#full-example)
-10. [Testing](#testing)
-11. [Compatibility](#compatibility)
-12. [Troubleshooting](#troubleshooting)
+7. [Swagger helper](#swagger-helper)
+8. [Validation decorators](#validation-decorators)
+9. [Utilities](#utilities)
+10. [Full example](#full-example)
+11. [Testing](#testing)
+12. [Compatibility](#compatibility)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Installation
 
 ```bash
-npm install nestjs-typeorm3-kit typeorm-transactional
+npm install nestjs-typeorm3-kit
 # or
-yarn add nestjs-typeorm3-kit typeorm-transactional
+yarn add nestjs-typeorm3-kit
 # or
-pnpm add nestjs-typeorm3-kit typeorm-transactional
+pnpm add nestjs-typeorm3-kit
+# or
+bun add nestjs-typeorm3-kit
 ```
+
+> Starting from **v0.2.0**, `typeorm-transactional` is vendored inside the
+> package — you no longer need to install it separately.
 
 Peer dependencies (install if you don't already have them):
 
 ```bash
 npm install @nestjs/common @nestjs/core @nestjs/typeorm typeorm reflect-metadata rxjs class-validator class-transformer
 ```
+
+**Runtime requirement:** Node.js **>= 16.4** or **Bun**. The vendored
+transactional layer uses Node's built-in `AsyncLocalStorage` — there is no
+`cls-hooked` fallback.
 
 ---
 
@@ -135,6 +148,42 @@ export class BookService {
   }
 }
 ```
+
+---
+
+## Relationship to `typeorm-transactional`
+
+`nestjs-typeorm3-kit` is a **wrapper fork** of [`typeorm-transactional`](https://github.com/Aliheym/typeorm-transactional). Concretely:
+
+- **Vendored:** the entire `typeorm-transactional@v0.5.0` source lives in [`src/vendor/transactional/`](./src/vendor/transactional). The MIT [LICENSE](./src/vendor/transactional/LICENSE) (Copyright © Ohad David) is preserved verbatim.
+- **Wrapped:** `setupTransactionContext` and `@DefTransaction` are thin wrappers over the vendored `initializeTransactionalContext` and `@Transactional` decorators.
+- **Re-exported:** `Transactional`, `Propagation`, `IsolationLevel`, `StorageDriver`, `addTransactionalDataSource`, `runInTransaction`, `wrapInTransaction`, `runOnTransactionCommit`, `runOnTransactionRollback`, `runOnTransactionComplete`, `TransactionalError`, `getDataSourceByName`, `deleteDataSourceByName` are all re-exported from `nestjs-typeorm3-kit` so you only need one import path.
+
+### What changed vs. upstream
+
+| Area | Upstream `v0.5.0` | This fork (v0.2.0+) |
+| --- | --- | --- |
+| Storage drivers | `cls-hooked` + `AsyncLocalStorage` | Only `AsyncLocalStorage` |
+| Runtime dependencies | `cls-hooked`, `@types/cls-hooked`, `semver` | None |
+| Bun support | ❌ broken (`async_hooks` incomplete) | ✅ works |
+| Node requirement | `>= 14` | `>= 16.4` |
+| Public API (decorators, hooks, propagation, isolation) | — | **Identical** |
+| `initializeTransactionalContext` options | `{ maxHookHandlers, storageDriver }` | `{ maxHookHandlers }` — `storageDriver` removed (only one driver) |
+| `StorageDriver` enum values | `AUTO`, `CLS_HOOKED`, `ASYNC_LOCAL_STORAGE` | `AUTO` (alias), `ASYNC_LOCAL_STORAGE` |
+
+### Migrating from `typeorm-transactional`
+
+```diff
+- import { Transactional, Propagation, addTransactionalDataSource } from 'typeorm-transactional';
++ import { Transactional, Propagation, addTransactionalDataSource } from 'nestjs-typeorm3-kit';
+
+- import { initializeTransactionalContext, StorageDriver } from 'typeorm-transactional';
+- initializeTransactionalContext({ storageDriver: StorageDriver.CLS_HOOKED });
++ import { setupTransactionContext } from 'nestjs-typeorm3-kit';
++ setupTransactionContext();
+```
+
+Then **uninstall** `typeorm-transactional` — it is no longer needed.
 
 ---
 
@@ -258,13 +307,29 @@ await bookRepo.findOne({ where: { id: 1 } }); // → Book | null (normal)
 
 ### `setupTransactionContext`
 
-Must be called in `main.ts` **before** `NestFactory.create`. It initialises `typeorm-transactional`'s `AsyncLocalStorage`-based context, which `@DefTransaction` (and the raw `@Transactional`) rely on.
+Must be called in `main.ts` **before** `NestFactory.create`. It initialises the vendored transactional layer, which `@DefTransaction` relies on.
 
 ```ts
-import { setupTransactionContext, addTransactionalDataSource } from "nestjs-typeorm3-kit";
+import { setupTransactionContext } from "nestjs-typeorm3-kit";
 
 setupTransactionContext();
 ```
+
+**Options**
+
+| Field             | Type     | Default | Description                                          |
+| ----------------- | -------- | ------- | ---------------------------------------------------- |
+| `maxHookHandlers` | `number` | `10`    | Max number of `commit`/`rollback`/`complete` hooks.  |
+
+#### Runtime support
+
+The vendored transactional layer uses **`AsyncLocalStorage`** as the only storage driver. That means:
+
+- ✅ **Node.js >= 16.4** — works out of the box.
+- ✅ **Bun** — works out of the box. Bun does not fully implement `async_hooks`, which is why the upstream `cls-hooked` driver does not work. By vendoring + dropping `cls-hooked`, this package sidesteps that problem.
+- ❌ **Node.js < 16.4** — not supported. Upgrade Node, or stay on `nestjs-typeorm3-kit@0.1.x`.
+
+`StorageDriver`, `Propagation`, `IsolationLevel`, and `addTransactionalDataSource` are re-exported from `nestjs-typeorm3-kit` — you don't need a separate import from `typeorm-transactional` (which is no longer a runtime dependency since v0.2.0).
 
 You also need to register each DataSource as transactional. This is typically done in your database module:
 
@@ -279,11 +344,10 @@ TypeOrmModule.forRootAsync({
 
 ### `@DefTransaction`
 
-Decorator-based transactions — a thin wrapper over `typeorm-transactional`'s `@Transactional`.
+Decorator-based transactions — a thin wrapper over the vendored `@Transactional` (a fork of `typeorm-transactional@0.5.0`).
 
 ```ts
-import { DefTransaction } from "nestjs-typeorm3-kit";
-import { Propagation } from "typeorm-transactional";
+import { DefTransaction, Propagation } from "nestjs-typeorm3-kit";
 
 class BookService {
   @DefTransaction() // default connection, default propagation
@@ -491,17 +555,20 @@ yarn test:integration   # integration tests (needs Postgres)
 
 ## Compatibility
 
-| Peer dependency   | Range          |
-| ----------------- | -------------- |
-| `@nestjs/common`  | `>= 8.0.0`     |
-| `@nestjs/core`    | `>= 8.0.0`     |
-| `@nestjs/typeorm` | `>= 8.1.0`     |
-| `typeorm`         | `>= 0.3.0`     |
-| `typeorm-transactional` | `>= 0.5.0` |
-| `reflect-metadata` | `>= 0.1.13`   |
-| `rxjs`            | `>= 7.2.0`     |
+**Runtime:** Node.js `>= 16.4` or Bun.
+
+| Peer dependency    | Range       |
+| ------------------ | ----------- |
+| `@nestjs/common`   | `>= 8.0.0`  |
+| `@nestjs/core`     | `>= 8.0.0`  |
+| `@nestjs/typeorm`  | `>= 8.1.0`  |
+| `typeorm`          | `>= 0.3.0`  |
+| `reflect-metadata` | `>= 0.1.13` |
+| `rxjs`             | `>= 7.2.0`  |
 
 Developed against NestJS v11 / TypeORM 0.3.x. For NestJS v8–v10 the public API surface is the same, but please test before upgrading in production.
+
+Since v0.2.0, `typeorm-transactional` is **vendored** (a stripped-down fork of `v0.5.0` is bundled inside `src/vendor/transactional/`). The original package is no longer a runtime or peer dependency.
 
 ---
 
@@ -512,6 +579,9 @@ You forgot to import the `DefRepositoryModule`-wrapping module, or the repositor
 
 **`Transactional context not initialised`**
 `setupTransactionContext()` must run **before** `NestFactory.create(AppModule)`. And every DataSource that uses `@DefTransaction` must be wrapped in `addTransactionalDataSource(...)`.
+
+**Transactions silently lose context on Bun (or older versions)**
+Bun does not fully implement Node's `async_hooks` API, which the upstream `cls-hooked` driver relies on. As of **v0.2.0** the package vendors `typeorm-transactional` with `cls-hooked` removed entirely — only `AsyncLocalStorage` is used, which works on both Node and Bun. If you're on an older version (`< 0.2.0`) and stuck on Bun, upgrade or pin `StorageDriver.ASYNC_LOCAL_STORAGE`.
 
 **`findOne` returns `null` for a query I expect to work**
 That's the `RepositoryWrapper` guard at work — one of the values passed in `where` is `undefined`. Either provide a real value or a `IsNull()`/`Not()` clause. If you need the raw TypeORM behaviour, use `Repository` instead of `RepositoryWrapper`.

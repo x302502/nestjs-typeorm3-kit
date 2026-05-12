@@ -1,4 +1,4 @@
-import { IsolationLevel, Propagation, Transactional } from 'typeorm-transactional';
+import { IsolationLevel, Propagation, Transactional } from '../../vendor/transactional';
 
 /**
  * Transactional decorator

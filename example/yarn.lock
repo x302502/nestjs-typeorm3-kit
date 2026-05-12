@@ -4617,10 +4617,14 @@ neo-async@^2.6.2:
   resolved "https://registry.npmjs.org/neo-async/-/neo-async-2.6.2.tgz#b4aafb93e3aeb2d8174ca53cf163ab7d7308305f"
   integrity sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==
 
-nestjs-typeorm3-kit@^0.1.2:
-  version "0.1.2"
-  resolved "https://registry.npmjs.org/nestjs-typeorm3-kit/-/nestjs-typeorm3-kit-0.1.2.tgz#d67ae1f2e1dfaa99f566ac6c140c81b02ae90922"
-  integrity sha512-3dbx1jKe+a5Tfw08pchqKh3/rvh50RIzWBVEuLM7GHCH7ASbHaTtkIwMvPO5lnIp2ODqp9osRoiFoJQtTVLiYw==
+nestjs-typeorm3-kit@^0.1.8:
+  version "0.1.8"
+  resolved "https://registry.npmjs.org/nestjs-typeorm3-kit/-/nestjs-typeorm3-kit-0.1.8.tgz#3ff59bf1d9bfd4ea8745ce7b01112d97066282e2"
+  integrity sha512-xOVSqn96GEk7Sx0FdmxJs4neJP7IYRrHjyoSsWj4dyPOM0HmrwALEXpq/DX4d3YOr9tnmpaEtOp65j5FpmXdKQ==
+
+"nestjs-typeorm3-kit@file:../nestjs-typeorm3-kit-0.1.8.tgz":
+  version "0.1.8"
+  resolved "file:../nestjs-typeorm3-kit-0.1.8.tgz#d56f3e78be9689abef26c15b7265f30ea09636cc"
 
 node-abort-controller@^3.0.1:
   version "3.1.1"

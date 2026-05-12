@@ -1,7 +1,7 @@
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
 import { DataSource, DataSourceOptions } from 'typeorm';
-import { addTransactionalDataSource } from 'typeorm-transactional';
+import { addTransactionalDataSource } from 'nestjs-typeorm3-kit';
 import { PRIMARY_CONNECTION } from '~/common/constants';
 
 const primaryDatabase = TypeOrmModule.forRootAsync({

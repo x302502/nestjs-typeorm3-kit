@@ -1,14 +1,14 @@
 import "reflect-metadata";
 
-jest.mock("typeorm-transactional", () => {
-  const actual = jest.requireActual("typeorm-transactional");
+jest.mock("../../src/vendor/transactional", () => {
+  const actual = jest.requireActual("../../src/vendor/transactional");
   return {
     ...actual,
     Transactional: jest.fn(() => () => undefined),
   };
 });
 
-import { Transactional } from "typeorm-transactional";
+import { Transactional } from "../../src/vendor/transactional";
 import { DefTransaction } from "../../src";
 
 describe("DefTransaction", () => {

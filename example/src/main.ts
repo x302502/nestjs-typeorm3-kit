@@ -26,6 +26,8 @@ const configSwagger = (app: INestApplication) => {
 };
 
 async function bootstrap() {
+  // Defaults to StorageDriver.AUTO so this also works on Bun.
+  // For explicit control: setupTransactionContext({ storageDriver: StorageDriver.ASYNC_LOCAL_STORAGE })
   setupTransactionContext();
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT || 3000;
