@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "build": "rimraf dist && tsc",
-    "test": "jest --config ./tests/jest.config.json --detectOpenHandles",
+    "test": "jest --config ./tests/unit/jest.config.json",
+    "test:integration": "jest --config ./tests/jest.config.json --detectOpenHandles",
     "prepare": "yarn build",
     "gen-docs": "typedoc --plugin typedoc-plugin-markdown --out docs src/**/*.ts",
     "gen-docs-github": "npx typedoc --theme github-wiki src/**/*.ts"

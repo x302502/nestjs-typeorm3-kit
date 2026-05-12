@@ -21,13 +21,13 @@ export const configSwaggerDocument = (
   Object.keys(schemasBinding).forEach((key) => {
     const value = schemasBinding[key] as SchemasObject;
     if (!targetSchemas[key]) {
-      Object.assign(targetSchemas, { key: value });
+      Object.assign(targetSchemas, { [key]: value });
     } else {
       const targetValue = targetSchemas[key] as SchemasObject;
 
       Object.assign(targetValue.properties, value.properties);
       targetValue.required = value.required;
-      Object.assign(targetSchemas, { key: targetValue });
+      Object.assign(targetSchemas, { [key]: targetValue });
     }
   });
   document.components.schemas = Object.assign({}, targetSchemas);
