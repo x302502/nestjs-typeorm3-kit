@@ -40,11 +40,7 @@ function getProviders(
     return {
       provide: getDefRepositoryToken(repository, dataSource),
       useFactory: (dataSource: DataSource) => {
-        return new repository(
-          entity,
-          dataSource.manager,
-          dataSource?.createQueryRunner()
-        );
+        return new repository(entity, dataSource.manager);
       },
       inject: [getDataSourceToken(dataSource)],
     };
