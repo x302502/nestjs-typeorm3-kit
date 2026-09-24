@@ -1,3 +1,5 @@
+
+
 # nestjs-typeorm3-kit
 
 [![npm](https://img.shields.io/npm/v/nestjs-typeorm3-kit)](https://www.npmjs.com/package/nestjs-typeorm3-kit) ![MIT License](https://img.shields.io/npm/l/nestjs-typeorm3-kit.svg)
@@ -62,7 +64,7 @@ bun add nestjs-typeorm3-kit
 Peer dependencies (install if you don't already have them):
 
 ```bash
-npm install @nestjs/common @nestjs/core @nestjs/typeorm typeorm reflect-metadata rxjs class-validator class-transformer
+npm install @nestjs/common @nestjs/core @nestjs/typeorm typeorm reflect-metadata rxjs class-validator class-transformer libphonenumber-js
 ```
 
 **Runtime requirement:** Node.js **>= 16.4** or **Bun**. The vendored
