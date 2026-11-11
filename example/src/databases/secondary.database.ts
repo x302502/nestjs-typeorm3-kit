@@ -16,6 +16,8 @@ const secondaryDatabase = TypeOrmModule.forRootAsync({
     database: 'secondary_db',
     entities: [join(__dirname, '../domains/secondary/**/*.entity.{ts,js}')],
     synchronize: true,
+    // Fail loudly instead of dropping `{ id: undefined }` / `{ id: null }` from a filter
+    invalidWhereValuesBehavior: { undefined: 'throw', null: 'throw' },
     autoLoadEntities: true,
     retryAttempts: 2,
     retryDelay: 1000,

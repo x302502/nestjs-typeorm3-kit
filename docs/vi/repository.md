@@ -98,9 +98,9 @@ function DefEntityRepository(target: EntityTarget<ObjectLiteral>): ClassDecorato
 
 ### `RepositoryWrapper<Entity>`
 
-Subclass của `TypeOrmRepository<Entity>` override `findOne` để trả `null` thay vì trả **row đầu của bảng** khi `where` có giá trị `undefined`.
+Subclass của `TypeOrmRepository<Entity>` override các hàm lấy một dòng (`findOne`, `findOneBy`, `findOneOrFail`, `findOneByOrFail`) để trả `null` / throw `EntityNotFoundError` thay vì trả **row đầu của bảng** khi `where` có giá trị `undefined`.
 
-**Vì sao cần.** `TypeORM.findOne({ where: { id: undefined } })` sẽ loại bỏ `id` (vì `undefined` không serialize được), kết quả là `WHERE` trống và query trả row đầu bất kỳ — footgun nguy hiểm có thể gây auth bypass (ví dụ `findOne({ where: { id: req.user?.id } })` trả row admin).
+**Vì sao cần.** `TypeORM.findOne({ where: { id: undefined } })` sẽ loại `id` khỏi điều kiện — mặc định `null` cũng bị loại y hệt — kết quả là `WHERE` trống và query trả row đầu bất kỳ — footgun nguy hiểm có thể gây auth bypass (ví dụ `findOne({ where: { id: req.user?.id } })` trả row admin).
 
 **Behaviour**
 
@@ -109,9 +109,9 @@ Subclass của `TypeOrmRepository<Entity>` override `findOne` để trả `null`
 1. `options` thiếu hoặc không phải object.
 2. `options.where` thiếu, `null`, hoặc không phải object.
 3. `options.where` rỗng (`{}`, `[]`, hoặc mảng OR chứa `{}`).
-4. Column, relation hoặc điều kiện embedded đã map có `undefined`, hoặc điều kiện relation/embedded lồng nhau rỗng.
+4. Column, relation hoặc điều kiện embedded đã map có giá trị `undefined` hoặc `null`, hoặc điều kiện relation/embedded lồng nhau rỗng. Dùng `IsNull()` để lọc SQL `NULL`.
 
-Ngược lại thì delegate xuống `Repository.findOne` gốc.
+Ngược lại thì delegate xuống `Repository.findOne` gốc. Quy tắc tương tự áp dụng cho tham số `where` của `findOneBy(where)`; `findOneOrFail` / `findOneByOrFail` throw `EntityNotFoundError` ở những chỗ hai hàm kia trả `null`.
 
 **Ví dụ**
 
@@ -127,11 +127,24 @@ await bookRepo.findOne();                              // → null
 await bookRepo.findOne({ where: {} });                 // → null (không có điều kiện)
 await bookRepo.findOne({ where: [{}, { id: 1 }] });     // → null (nhánh OR không an toàn)
 await bookRepo.findOne({ where: { author: { id: undefined } } }); // → null
+await bookRepo.findOneBy({ id: undefined });                       // → null
+await bookRepo.findOneOrFail({ where: { id: undefined } });       // → throw EntityNotFoundError
+await bookRepo.findOneBy({ authorId: null });                      // → null (dùng IsNull())
 ```
+
+**Option `invalidWhereValuesBehavior` của DataSource** (TypeORM ≥ 0.3.27) được tôn trọng: với `null: "sql-null"`, giá trị `null` được cho qua thành `IS NULL`; với `"throw"`, wrapper để TypeORM tự throw lỗi. Điều kiện rỗng (`{}`) vẫn bị chặn vì option đó không xử lý trường hợp này.
 
 **Lỗi hay gặp**
 
 - Điều kiện rỗng ở cấp đầu hoặc relation/embedded lồng nhau trả `null`; `undefined` trên thuộc tính đã map bị chặn ở mọi nhánh OR. Điều kiện hợp lệ vẫn dùng `findOne` của TypeORM.
+- Các hàm lấy nhiều dòng (`find`, `findBy`, `count`, `exists`, …) và `update`/`delete` **không** được chặn: TypeORM bỏ giá trị `undefined`/`null` khỏi điều kiện, nên `findBy({ id: undefined })` khớp mọi dòng. Với TypeORM ≥ 0.3.27, hãy cho mọi hàm throw thay vì lặng lẽ bỏ điều kiện:
+
+  ```ts
+  new DataSource({
+    // ...
+    invalidWhereValuesBehavior: { undefined: "throw", null: "throw" },
+  });
+  ```
 - Nếu cố ý muốn behaviour cũ của TypeORM, hãy extend `Repository` trực tiếp thay vì `RepositoryWrapper`.
 
 ---

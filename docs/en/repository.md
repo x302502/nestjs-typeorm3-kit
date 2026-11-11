@@ -11,7 +11,7 @@ TypeORM 0.3 removed the `@EntityRepository()` decorator that made custom reposit
 - `@DefEntityRepository(Entity)` — marks a class as a custom repository for an entity.
 - `DefRepositoryModule` — Nest module that auto-discovers repositories and registers them as DI providers.
 - `@InjectRepo(Repo, dataSource?)` — inject by class, optionally targeting a non-default DataSource.
-- `RepositoryWrapper` — `Repository` subclass that hardens `findOne` against TypeORM's "first row on undefined where" footgun.
+- `RepositoryWrapper` — `Repository` subclass that hardens `findOne`, `findOneBy` and their `*OrFail` variants against TypeORM's "first row on undefined where" footgun.
 
 ## Quick example
 
@@ -98,9 +98,9 @@ function DefEntityRepository(target: EntityTarget<ObjectLiteral>): ClassDecorato
 
 ### `RepositoryWrapper<Entity>`
 
-A subclass of `TypeOrmRepository<Entity>` that overrides `findOne` to return `null` instead of accidentally returning the **first row of the table** when the `where` clause has any `undefined` value.
+A subclass of `TypeOrmRepository<Entity>` that overrides the single-row lookups (`findOne`, `findOneBy`, `findOneOrFail`, `findOneByOrFail`) to return `null` / throw `EntityNotFoundError` instead of accidentally returning the **first row of the table** when the `where` clause has any `undefined` value.
 
-**Why this matters.** `TypeORM.findOne({ where: { id: undefined } })` strips the `id` because `undefined` is not serialisable, leaving an empty `WHERE` clause. The query then returns whatever row TypeORM finds first — a footgun that can cause auth bypasses (`findOne({ where: { id: req.user?.id } })` returning admin row).
+**Why this matters.** `TypeORM.findOne({ where: { id: undefined } })` strips the `id` from the filter — by default it does the same for `null` — leaving an empty `WHERE` clause. The query then returns whatever row TypeORM finds first — a footgun that can cause auth bypasses (`findOne({ where: { id: req.user?.id } })` returning admin row).
 
 **Behaviour**
 
@@ -109,9 +109,9 @@ A subclass of `TypeOrmRepository<Entity>` that overrides `findOne` to return `nu
 1. `options` is missing or not an object.
 2. `options.where` is missing, `null`, or not an object.
 3. `options.where` is empty (`{}`, `[]`, or an OR array containing `{}`).
-4. A mapped column, relation, or embedded predicate is `undefined`, or a nested relation/embedded condition is empty.
+4. A mapped column, relation, or embedded predicate is `undefined` or `null`, or a nested relation/embedded condition is empty. Use `IsNull()` to match SQL `NULL`.
 
-Otherwise it delegates to the original `Repository.findOne`.
+Otherwise it delegates to the original `Repository.findOne`. The same rules apply to the `where` argument of `findOneBy(where)`; `findOneOrFail` / `findOneByOrFail` throw `EntityNotFoundError` where the others return `null`.
 
 **Example**
 
@@ -127,11 +127,25 @@ await bookRepo.findOne();                              // → null
 await bookRepo.findOne({ where: {} });                 // → null (no filter)
 await bookRepo.findOne({ where: [{}, { id: 1 }] });     // → null (unsafe OR branch)
 await bookRepo.findOne({ where: { author: { id: undefined } } }); // → null
+await bookRepo.findOneBy({ id: undefined });                       // → null
+await bookRepo.findOneOrFail({ where: { id: undefined } });       // → throws EntityNotFoundError
+await bookRepo.findOneBy({ authorId: null });                      // → null (use IsNull())
 ```
+
+**DataSource `invalidWhereValuesBehavior`** (TypeORM ≥ 0.3.27) is respected: with `null: "sql-null"` a `null` value passes through as `IS NULL`; with `"throw"` the wrapper lets TypeORM throw its own error. Empty filters (`{}`) are still blocked, because that option does not cover them.
 
 **Pitfalls**
 
 - Empty top-level or nested relation/embedded conditions return `null`; mapped `undefined` values are blocked in every OR branch. Valid predicates still use TypeORM's `findOne`.
+- Multi-row methods (`find`, `findBy`, `count`, `exists`, …) and `update`/`delete` are **not** guarded: TypeORM drops `undefined`/`null` filter values, so `findBy({ id: undefined })` matches every row. On TypeORM ≥ 0.3.27, make every method fail loudly instead:
+
+  ```ts
+  // TypeORM >= 0.3.27: fail loudly instead of dropping the condition, for every method
+  new DataSource({
+    // ...
+    invalidWhereValuesBehavior: { undefined: "throw", null: "throw" },
+  });
+  ```
 - If you legitimately want TypeORM's old behaviour, extend `Repository` directly instead of `RepositoryWrapper`.
 
 ---

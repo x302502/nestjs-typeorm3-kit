@@ -161,7 +161,7 @@ Routes become `/client/books`, `/client/authors`. Swagger groups: `[Client] Book
 
 **Pitfalls**
 
-- Imported modules are scoped to each parent's route prefix. Reusing a child under two parents mounts two module instances (and their providers) rather than sharing one provider instance across both routes.
+- Imported modules that register controllers (directly or through their imports) are scoped to each parent's route prefix: reusing such a child under two parents mounts two module instances, and the providers declared in that module are created once per mount. Modules without controllers (services, repository modules, `@Global` modules) are shared, so their providers stay singletons — keep shared state (caches, connections) in a route-less module.
 - To filter Swagger routes with `include: [ChildModuleClass]` across prefixed mounts, call `createScopedSwaggerDocument` instead of `SwaggerModule.createDocument`. The latter compares class identity and misses scoped copies; `include: [ParentModule]` with `deepScanRoutes: true` only scans its direct imports.
 - Standalone `@Controller` (without `@DefController`) is still tagged, but the Bearer-auth requirement won't be added.
 
