@@ -7,13 +7,13 @@ This directory contains a complete example application demonstrating how to use 
 This example showcases:
 
 - Multiple database connections (primary and secondary)
-- Transaction management with `typeorm-transactional`
+- Transaction management with `@DefTransaction` (the transactional layer is vendored in `nestjs-typeorm3-kit`)
 - Domain-driven structure for organizing entities and modules
 - TypeORM entity configuration and relationships
 
 ## Prerequisites
 
-- Node.js (v16 or higher recommended)
+- Node.js >= 20 (required by NestJS 11)
 - PostgreSQL (or other database supported by TypeORM)
 - Yarn, NPM, pnpm, or bun package manager
 
@@ -37,6 +37,26 @@ bun install
 
 ### 2. Configure Database Connections
 
+Start PostgreSQL with Docker. The container creates `primary_db` and `secondary_db` on first start:
+
+```bash
+yarn db:up      # docker compose up -d --wait
+yarn db:down    # stop it (add -v to docker compose down to wipe the data)
+```
+
+If port 5432 is already taken, pick another one and use it for the app too:
+
+```bash
+DB_PORT=55432 yarn db:up
+DB_PORT=55432 yarn start:dev
+```
+
+Using your own PostgreSQL instead? Create the two databases yourself:
+
+```bash
+psql -U postgres -c "CREATE DATABASE primary_db" -c "CREATE DATABASE secondary_db"
+```
+
 The example is configured with two database connections:
 
 #### Primary Database (src/databases/primary.database.ts)
@@ -45,13 +65,14 @@ The example is configured with two database connections:
 const primaryDatabase = TypeOrmModule.forRootAsync({
   name: PRIMARY_CONNECTION, // primary connection
   useFactory: () => ({
+    name: PRIMARY_CONNECTION, // @nestjs/typeorm reads it from these options on shutdown
     type: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: Number(process.env.DB_PORT) || 5432,
     username: 'postgres',
     password: 'Abc12345',
     database: 'primary_db',
-    entities: [join(__dirname, './domains/primary/**/*.entity.{ts,js}')],
+    entities: [join(__dirname, '../domains/primary/**/*.entity.{ts,js}')],
     synchronize: true,
     autoLoadEntities: true,
     retryAttempts: 2,
@@ -70,13 +91,14 @@ const primaryDatabase = TypeOrmModule.forRootAsync({
 const secondaryDatabase = TypeOrmModule.forRootAsync({
   name: SECONDARY_CONNECTION, // secondary connection
   useFactory: () => ({
+    name: SECONDARY_CONNECTION, // @nestjs/typeorm reads it from these options on shutdown
     type: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: Number(process.env.DB_PORT) || 5432,
     username: 'postgres',
     password: 'Abc12345',
     database: 'secondary_db',
-    entities: [join(__dirname, './domains/secondary/**/*.entity.{ts,js}')],
+    entities: [join(__dirname, '../domains/secondary/**/*.entity.{ts,js}')],
     synchronize: true,
     autoLoadEntities: true,
     retryAttempts: 2,
@@ -154,7 +176,7 @@ export class BookRepo extends BaseRepo<Book> {}
 
 ### 4. Using Transactions
 
-The example uses `typeorm-transactional` for transaction management:
+The example uses `@DefTransaction` for transaction management:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -218,6 +240,8 @@ npm run start:prod
 │   ├── domains/               # Domain entities organized by database
 │   └── modules/               # Feature modules
 ├── test/                      # Test files
+├── docker/init.sql            # Creates primary_db and secondary_db
+├── docker-compose.yml         # PostgreSQL for local runs
 ├── nest-cli.json              # NestJS CLI configuration
 ├── package.json               # Dependencies and scripts
 └── tsconfig.json              # TypeScript configuration
@@ -243,4 +267,4 @@ useFactory: () => ({
 
 ## Learn More
 
-For complete documentation, visit the [nestjs-typeorm3-kit documentation](https://x302502.github.io/nestjs-typeorm3-kit/).
+For complete documentation, see the [package README](../README.md) and the [guides in `docs/`](../docs/README.md).

@@ -1,48 +1,51 @@
-import { IsolationLevel, Propagation, Transactional } from '../../vendor/transactional';
+import {
+  IsolationLevel,
+  Propagation,
+  Transactional,
+  WrapInTransactionOptions,
+} from '../../vendor/transactional';
+
+export interface DefTransactionOptions {
+  connectionName?: string | (() => string | undefined);
+  propagation?: Propagation;
+  isoLevel?: 'READ_UNCOMMITTED' | 'READ_COMMITTED' | 'REPEATABLE_READ' | 'SERIALIZABLE';
+  isolationLevel?:
+    | IsolationLevel
+    | 'READ_UNCOMMITTED'
+    | 'READ_COMMITTED'
+    | 'REPEATABLE_READ'
+    | 'SERIALIZABLE';
+}
 
 /**
  * Transactional decorator
  * @param options
  * @returns
  */
-export function DefTransaction(options?: {
-  connectionName?: string | (() => string | undefined);
-  propagation?: Propagation;
-  isoLevel?: 'READ_UNCOMMITTED' | 'READ_COMMITTED' | 'REPEATABLE_READ' | 'SERIALIZABLE';
-}): MethodDecorator {
+export function DefTransaction(options?: DefTransactionOptions): MethodDecorator {
   if (!options) {
-    return function <T>(
-      target: Object,
-      propertyKey: string | symbol,
-      descriptor: TypedPropertyDescriptor<T>,
-    ) {
-      return Transactional({
-        //  propagation: Propagation.NESTED,
-      })(target, propertyKey, descriptor);
-    };
+    return Transactional();
   }
-  const { connectionName = undefined, propagation = undefined, isoLevel = undefined } = options;
-  let isolationLevel: IsolationLevel = undefined;
-  Object.keys(IsolationLevel).forEach(key => {
-    if (isoLevel === key) {
-      isolationLevel = IsolationLevel[key];
+  const { connectionName, propagation, isoLevel } = options;
+  let isolationLevel: IsolationLevel | undefined;
+  const targetIso = options.isolationLevel ?? isoLevel;
+  if (targetIso) {
+    for (const [key, val] of Object.entries(IsolationLevel)) {
+      if (targetIso === val || targetIso === key) {
+        isolationLevel = val;
+        break;
+      }
     }
-  });
-  const mixOptions = {};
-  if (connectionName) {
-    Object.assign(mixOptions, { connectionName });
   }
-  if (propagation) {
-    Object.assign(mixOptions, { propagation });
+  const mixOptions: WrapInTransactionOptions = {};
+  if (connectionName !== undefined) {
+    mixOptions.connectionName = connectionName;
   }
-  if (isoLevel) {
-    Object.assign(mixOptions, { isoLevel });
+  if (propagation !== undefined) {
+    mixOptions.propagation = propagation;
   }
-  return function <T>(
-    target: Object,
-    propertyKey: string | symbol,
-    descriptor: TypedPropertyDescriptor<T>,
-  ) {
-    return Transactional(mixOptions)(target, propertyKey, descriptor);
-  };
+  if (isolationLevel !== undefined) {
+    mixOptions.isolationLevel = isolationLevel;
+  }
+  return Transactional(mixOptions);
 }

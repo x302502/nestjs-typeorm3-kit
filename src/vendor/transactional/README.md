@@ -24,8 +24,14 @@ version **0.5.0**.
   there is only one driver).
 - Removed all `semver`/`cls-hooked` imports.
 
-Everything else (decorators, hooks, propagation, isolation levels, patching
-logic, error types) is **functionally identical** to upstream `v0.5.0`.
+- Each `AsyncLocalStorage.run()` creates an independent snapshot of its parent
+  context. Parallel branches cannot overwrite one another's active manager.
+- `NESTED` uses the active `EntityManager.transaction()` (a TypeORM savepoint),
+  not a separate DataSource transaction. Commit hooks registered within a
+  released savepoint wait for the outer transaction's final outcome.
+
+The fork therefore differs from upstream `v0.5.0` in storage isolation,
+savepoint propagation, and nested hook timing as well as driver selection.
 
 ## License
 

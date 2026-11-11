@@ -226,3 +226,18 @@ export const getHookInContext = (context: StorageDriver | undefined) =>
 
 export const setHookInContext = (context: StorageDriver, emitter: EventEmitter | null) =>
   context.set(TYPEORM_HOOK_NAME, emitter);
+
+const dataSourceHookKey = (name: DataSourceName) => TYPEORM_HOOK_NAME + '/' + name;
+
+/**
+ * Hook of the latest transaction opened on the given data source in this async context.
+ * Unlike the context-wide hook, it is never replaced by transactions on other data sources.
+ */
+export const getHookByDataSourceName = (context: StorageDriver, name: DataSourceName) =>
+  (context.get(dataSourceHookKey(name)) as EventEmitter | null | undefined) || null;
+
+export const setHookByDataSourceName = (
+  context: StorageDriver,
+  name: DataSourceName,
+  emitter: EventEmitter | null,
+) => context.set(dataSourceHookKey(name), emitter);

@@ -5,15 +5,16 @@ import { addTransactionalDataSource } from 'nestjs-typeorm3-kit';
 import { SECONDARY_CONNECTION } from '~/common/constants';
 
 const secondaryDatabase = TypeOrmModule.forRootAsync({
-  name: SECONDARY_CONNECTION, // primary connection
+  name: SECONDARY_CONNECTION, // secondary connection
   useFactory: () => ({
+    name: SECONDARY_CONNECTION, // @nestjs/typeorm reads it from these options on shutdown
     type: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: Number(process.env.DB_PORT) || 5432,
     username: 'postgres',
     password: 'Abc12345',
     database: 'secondary_db',
-    entities: [join(__dirname, './domains/secondary/**/*.entity.{ts,js}')],
+    entities: [join(__dirname, '../domains/secondary/**/*.entity.{ts,js}')],
     synchronize: true,
     autoLoadEntities: true,
     retryAttempts: 2,

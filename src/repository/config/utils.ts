@@ -16,7 +16,7 @@ export function getDefRepositoryToken(
     if (!connectionPrefix) {
       return repository;
     }
-    return `${connectionPrefix}${getToken(repository)}`;
+    return `${connectionPrefix}${repository.name}`;
   }
   return `${connectionPrefix}${repository.name}Repository`;
 }
@@ -30,36 +30,36 @@ export function getEntityByRepository(repository: Repository) {
   return entity;
 }
 
-function getToken(repository: Repository) {
-  return repository.name;
-}
-
 function getDataSourcePrefix(
   dataSource: string | DataSource | DataSourceOptions = DEFAULT_CONNECTION_NAME,
-) {
-  if (dataSource === DEFAULT_CONNECTION_NAME) {
+): string {
+  if (!dataSource || dataSource === DEFAULT_CONNECTION_NAME) {
     return '';
   }
   if (typeof dataSource === 'string') {
     return dataSource + '_';
   }
-  if (dataSource.name === DEFAULT_CONNECTION_NAME || !dataSource.name) {
+  const name = 'name' in dataSource ? dataSource.name : undefined;
+  if (!name || name === DEFAULT_CONNECTION_NAME) {
     return '';
   }
-  return dataSource.name + '_';
+  return name + '_';
 }
-export async function loadRepositoriesFromPath(pattern: string): Promise<any[]> {
-  const files = await FastGlob(pattern, { absolute: true });
-  const repositories: any[] = [];
+
+export async function loadRepositoriesFromPath(pattern: string): Promise<Repository[]> {
+  const normalizedPattern = pattern.replace(/\\/g, '/');
+  const files = await FastGlob(normalizedPattern, { absolute: true });
+  const repositorySet = new Set<Repository>();
 
   for (const file of files) {
-    const moduleExports = await import(file);
+    // Dynamic import required for runtime-discovered glob paths
+    const moduleExports = (await import(file)) as Record<string, unknown>;
     for (const value of Object.values(moduleExports)) {
-      if (typeof value === 'function') {
-        repositories.push(value);
+      if (typeof value === 'function' && Reflect.hasMetadata(ENTITY_METADATA_KEY, value)) {
+        repositorySet.add(value as unknown as Repository);
       }
     }
   }
 
-  return repositories;
+  return Array.from(repositorySet);
 }

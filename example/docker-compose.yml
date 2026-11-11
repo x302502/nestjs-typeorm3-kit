@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nestjs-typeorm3-kit-example-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Abc12345
+    ports:
+      # Override when 5432 is taken: DB_PORT=55432 docker compose up -d
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pg_data:

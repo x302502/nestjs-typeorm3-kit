@@ -24,11 +24,8 @@ export function NewClass(): ClassDecorator {
     const original = target;
     // a utility function to generate instances of a class
     function construct(constructor: Function, args: any[]) {
-      const c: any = function () {
-        return constructor.apply(this, args);
-      };
-      c.prototype = constructor.prototype;
-      return new c();
+      // Reflect.construct also works for native ES2015+ classes, unlike apply()
+      return Reflect.construct(constructor, args);
     }
 
     // the new constructor behaviour

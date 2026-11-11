@@ -52,16 +52,20 @@ export function IsLongerThan(
   validationOptions: ValidationOptions = {}
 ): PropertyDecorator {
   return function (object: Object, propertyKey: string | symbol) {
-    if (!validationOptions.message) {
-      validationOptions.message = `${String(propertyKey)} must be longer than ${property}`;
-    }
+    // Copy so a shared options object never receives another property's message
+    const options: ValidationOptions = {
+      ...validationOptions,
+      message:
+        validationOptions.message ??
+        `${String(propertyKey)} must be longer than ${property}`,
+    };
 
     registerDecorator({
       name: "isLongerThan",
       target: object.constructor,
       propertyName: propertyKey as string,
       constraints: [property],
-      options: validationOptions,
+      options,
       validator: {
         validate(value: any, args: ValidationArguments) {
           const [relatedPropertyName] = args.constraints;
