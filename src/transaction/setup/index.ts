@@ -38,3 +38,19 @@ export {
   Propagation,
   IsolationLevel,
 };
+
+// Convenience re-exports from the vendored typeorm-transactional so consumers
+// only need a single import path.
+export {
+  Transactional,
+  runInTransaction,
+  wrapInTransaction,
+  runOnTransactionCommit,
+  runOnTransactionRollback,
+  runOnTransactionComplete,
+  TransactionalError,
+  getDataSourceByName,
+  deleteDataSourceByName,
+} from "../../vendor/transactional";
+
+export type { WrapInTransactionOptions } from "../../vendor/transactional";

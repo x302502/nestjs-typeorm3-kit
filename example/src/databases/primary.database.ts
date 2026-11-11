@@ -7,13 +7,14 @@ import { PRIMARY_CONNECTION } from '~/common/constants';
 const primaryDatabase = TypeOrmModule.forRootAsync({
   name: PRIMARY_CONNECTION, // primary connection
   useFactory: () => ({
+    name: PRIMARY_CONNECTION, // @nestjs/typeorm reads it from these options on shutdown
     type: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: Number(process.env.DB_PORT) || 5432,
     username: 'postgres',
     password: 'Abc12345',
     database: 'primary_db',
-    entities: [join(__dirname, './domains/primary/**/*.entity.{ts,js}')],
+    entities: [join(__dirname, '../domains/primary/**/*.entity.{ts,js}')],
     synchronize: true,
     autoLoadEntities: true,
     retryAttempts: 2,

@@ -1,9 +1,11 @@
 import { INestApplication } from "@nestjs/common";
+import { ModulesContainer } from "@nestjs/core";
 import { SwaggerModule } from "@nestjs/swagger";
-import { getFromContainer, MetadataStorage } from "class-validator";
+import type { SwaggerDocumentOptions } from "@nestjs/swagger";
+import { getMetadataStorage } from "class-validator";
 import {
   OpenAPIObject,
-  SchemasObject,
+  SchemaObject,
 } from "@nestjs/swagger/dist/interfaces/open-api-spec.interface";
 import { validationMetadatasToSchemas } from "class-validator-jsonschema";
 
@@ -12,27 +14,77 @@ export const configSwaggerDocument = (
   document: OpenAPIObject,
   swaggerPath: string = "swagger"
 ) => {
-  // Creating all the swagger schemas based on the class-validator decorators
-  const metadatas = (getFromContainer(MetadataStorage) as any)
-    .validationMetadatas;
+  // Creating all the swagger schemas based on the class-validator decorators.
+  // The global metadata storage is read directly so a user-configured
+  // useContainer() without a MetadataStorage provider still works.
+  document.components = document.components || {};
   const targetSchemas = document.components.schemas || {};
-  const schemasBinding = validationMetadatasToSchemas(metadatas) || {};
+  const schemasBinding =
+    validationMetadatasToSchemas({
+      classValidatorMetadataStorage: getMetadataStorage(),
+      refPointerPrefix: "#/components/schemas/",
+    }) || {};
 
   Object.keys(schemasBinding).forEach((key) => {
-    const value = schemasBinding[key] as SchemasObject;
-    if (!targetSchemas[key]) {
-      Object.assign(targetSchemas, { [key]: value });
-    } else {
-      const targetValue = targetSchemas[key] as SchemasObject;
-
-      Object.assign(targetValue.properties, value.properties);
-      targetValue.required = value.required;
-      Object.assign(targetSchemas, { [key]: targetValue });
+    const value = schemasBinding[key] as SchemaObject;
+    const targetValue = targetSchemas[key];
+    if (!targetValue) {
+      targetSchemas[key] = value;
+      return;
     }
+    if ("$ref" in targetValue) {
+      return;
+    }
+
+    // Keep Swagger-generated properties; only fill in what it does not know.
+    const properties = (targetValue.properties = targetValue.properties || {});
+    Object.keys(value.properties || {}).forEach((prop) => {
+      if (!(prop in properties)) properties[prop] = value.properties[prop];
+    });
+    const required = new Set<string>([
+      ...(targetValue.required || []),
+      ...(value.required || []),
+    ]);
+    if (required.size) targetValue.required = [...required];
   });
   document.components.schemas = Object.assign({}, targetSchemas);
   SwaggerModule.setup(swaggerPath, app, document);
 };
+
+/**
+ * Swagger's `include` compares module classes by identity. A ChildModule mounted
+ * under multiple prefixes has one scoped Nest module class per mount, so expand
+ * each public class to its mounted copies before delegating to Swagger.
+ */
+export function createScopedSwaggerDocument(
+  app: INestApplication,
+  config: Omit<OpenAPIObject, "paths">,
+  options?: SwaggerDocumentOptions
+): OpenAPIObject {
+  if (!options?.include?.length) {
+    return SwaggerModule.createDocument(app, config, options);
+  }
+
+  const included = new Set<Function>(options.include);
+  for (const module of app.get(ModulesContainer).values()) {
+    const moduleType = module.metatype;
+    if (typeof moduleType !== "function" || included.has(moduleType)) {
+      continue;
+    }
+    let prototype = Object.getPrototypeOf(moduleType.prototype);
+    while (prototype) {
+      if (included.has(prototype.constructor)) {
+        included.add(moduleType);
+        break;
+      }
+      prototype = Object.getPrototypeOf(prototype);
+    }
+  }
+  return SwaggerModule.createDocument(app, config, {
+    ...options,
+    include: [...included],
+  });
+}
 
 import { join } from "path";
 import { readdirSync, statSync } from "fs";

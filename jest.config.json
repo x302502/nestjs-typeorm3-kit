@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "roots": ["<rootDir>/src"],
+  "testRegex": ".*\\.spec\\.ts$",
+  "extensionsToTreatAsEsm": [".ts"],
+  "transform": {
+    "^.+\\.tsx?$": ["ts-jest", { "useESM": true, "tsconfig": "<rootDir>/tsconfig.spec.json" }]
+  },
+  "collectCoverageFrom": ["src/**/*.ts", "!src/**/*.spec.ts", "!src/**/__fixtures__/**"],
+  "coverageDirectory": "<rootDir>/coverage",
+  "testEnvironment": "node"
+}

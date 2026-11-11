@@ -4,7 +4,9 @@ import {
   getHookInContext,
   getTransactionalContext,
   getTransactionalOptions,
+  setHookByDataSourceName,
   setHookInContext,
+  DataSourceName,
 } from '../common';
 import { StorageDriver } from '../storage/driver/interface';
 
@@ -19,16 +21,34 @@ export const getTransactionalContextHook = () => {
   return emitter;
 };
 
-export const runAndTriggerHooks = async (hook: EventEmitter, cb: () => unknown) => {
+export const runAndTriggerHooks = async (
+  hook: EventEmitter,
+  cb: () => unknown,
+  parentHook?: EventEmitter,
+) => {
   try {
     const result = await Promise.resolve(cb());
 
-    setImmediate(() => {
-      hook.emit('commit');
-
-      hook.emit('end', undefined);
-      hook.removeAllListeners();
-    });
+    if (parentHook) {
+      // A savepoint release is not a durable commit. Defer child hooks until
+      // the surrounding transaction commits or rolls back.
+      parentHook.once('commit', () => {
+        hook.emit('commit');
+        hook.emit('end', undefined);
+        hook.removeAllListeners();
+      });
+      parentHook.once('rollback', (err: Error) => {
+        hook.emit('rollback', err);
+        hook.emit('end', err);
+        hook.removeAllListeners();
+      });
+    } else {
+      setImmediate(() => {
+        hook.emit('commit');
+        hook.emit('end', undefined);
+        hook.removeAllListeners();
+      });
+    }
 
     return result;
   } catch (err) {
@@ -51,13 +71,21 @@ export const createEventEmitterInNewContext = (context: StorageDriver) => {
   return emitter;
 };
 
-export const runInNewHookContext = async (context: StorageDriver, cb: () => unknown) => {
+export const runInNewHookContext = async (
+  context: StorageDriver,
+  cb: () => unknown,
+  parentHook?: EventEmitter,
+  dataSourceName?: DataSourceName,
+) => {
   const hook = createEventEmitterInNewContext(context);
 
   return await context.run(() => {
     setHookInContext(context, hook);
+    if (dataSourceName !== undefined) {
+      setHookByDataSourceName(context, dataSourceName, hook);
+    }
 
-    return runAndTriggerHooks(hook, cb);
+    return runAndTriggerHooks(hook, cb, parentHook);
   });
 };
 

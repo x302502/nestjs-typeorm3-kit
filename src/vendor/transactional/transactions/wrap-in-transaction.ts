@@ -1,22 +1,27 @@
-import { EntityManager } from 'typeorm';
+import type { EventEmitter } from 'events';
+import { DataSource, EntityManager } from 'typeorm';
 import {
   DataSourceName,
   getDataSourceByName,
   getEntityManagerByDataSourceName,
+  getHookByDataSourceName,
+  getHookInContext,
   getTransactionalContext,
   setEntityManagerByDataSourceName,
+  setHookInContext,
 } from '../common';
 
 import { IsolationLevel } from '../enums/isolation-level';
 import { Propagation } from '../enums/propagation';
 import { runInNewHookContext } from '../hooks';
+import { NestedScope, getNestedScope, setNestedScope } from './nested-scope';
 import { TransactionalError } from '../errors/transactional';
 
 export interface WrapInTransactionOptions {
   /**
    * For compatibility with `typeorm-transactional-cls-hooked` we use `connectionName`
    */
-  connectionName?: DataSourceName;
+  connectionName?: DataSourceName | (() => DataSourceName | undefined);
 
   propagation?: Propagation;
 
@@ -34,11 +39,13 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
     const context = getTransactionalContext();
     if (!context) {
       throw new Error(
-        'No CLS namespace defined in your app ... please call initializeTransactionalContext() before application start.',
+        'No transaction context defined. Call setupTransactionContext() before application start.',
       );
     }
 
-    const connectionName = options?.connectionName ?? 'default';
+    const connectionName = (typeof options?.connectionName === 'function'
+      ? options.connectionName()
+      : options?.connectionName) ?? 'default';
 
     const dataSource = getDataSourceByName(connectionName);
     if (!dataSource) {
@@ -51,11 +58,25 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
     const isolationLevel = options?.isolationLevel;
 
     const runOriginal = () => fn.apply(this, args);
+    const runWithOwningHook = () => {
+      const hook = getHookByDataSourceName(context, connectionName);
+      if (!hook || hook === getHookInContext(context)) {
+        return runOriginal();
+      }
+      return context.run(async () => {
+        setHookInContext(context, hook);
+        return runOriginal();
+      });
+    };
     const runWithNewHook = () => runInNewHookContext(context, runOriginal);
 
-    const runWithNewTransaction = () => {
+    const runWithNewTransaction = (
+      transactionManager: DataSource | EntityManager = dataSource,
+      parentHook?: EventEmitter,
+    ) => {
       const transactionCallback = async (entityManager: EntityManager) => {
         setEntityManagerByDataSourceName(context, connectionName, entityManager);
+        setNestedScope(context, connectionName, entityManager);
 
         try {
           const result = await runOriginal();
@@ -68,12 +89,12 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
 
       if (isolationLevel) {
         return runInNewHookContext(context, () => {
-          return dataSource.transaction(isolationLevel, transactionCallback);
-        });
+          return transactionManager.transaction(isolationLevel, transactionCallback);
+        }, parentHook, connectionName);
       } else {
         return runInNewHookContext(context, () => {
-          return dataSource.transaction(transactionCallback);
-        });
+          return transactionManager.transaction(transactionCallback);
+        }, parentHook, connectionName);
       }
     };
 
@@ -87,10 +108,25 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
             );
           }
 
-          return runOriginal();
+          return runWithOwningHook();
 
         case Propagation.NESTED:
-          return runWithNewTransaction();
+          if (!currentTransaction) {
+            return runWithNewTransaction();
+          }
+
+          // Savepoints share one query runner and a depth counter, so sibling
+          // savepoints must be opened and closed one at a time.
+          const scope: NestedScope = getNestedScope(context, connectionName, currentTransaction);
+          const release = await scope.acquire();
+          try {
+            return await runWithNewTransaction(
+              currentTransaction,
+              getHookByDataSourceName(context, connectionName) ?? undefined,
+            );
+          } finally {
+            release();
+          }
 
         case Propagation.NEVER:
           if (currentTransaction) {
@@ -114,7 +150,7 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
 
         case Propagation.REQUIRED:
           if (currentTransaction) {
-            return runOriginal();
+            return runWithOwningHook();
           }
 
           return runWithNewTransaction();
@@ -123,7 +159,7 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
           return runWithNewTransaction();
 
         case Propagation.SUPPORTS:
-          return currentTransaction ? runOriginal() : runWithNewHook();
+          return currentTransaction ? runWithOwningHook() : runWithNewHook();
       }
     });
   }

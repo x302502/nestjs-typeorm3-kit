@@ -2,8 +2,9 @@
 	"moduleFileExtensions": ["js", "json", "ts"],
 	"rootDir": "./",
 	"testRegex": ".*\\.spec\\.ts$",
+	"extensionsToTreatAsEsm": [".ts"],
 	"transform": {
-		"^.+\\.(t|j)s$": "ts-jest"
+		"^.+\\.tsx?$": ["ts-jest", { "useESM": true, "tsconfig": { "module": "ESNext", "moduleResolution": "node" } }]
 	},
 	"collectCoverageFrom": ["**/*.(t|j)s"],
 	"coverageDirectory": "../coverage",
