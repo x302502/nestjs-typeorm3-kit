@@ -4673,10 +4673,10 @@ neo-async@^2.6.2:
   resolved "https://registry.npmjs.org/neo-async/-/neo-async-2.6.2.tgz#b4aafb93e3aeb2d8174ca53cf163ab7d7308305f"
   integrity sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==
 
-nestjs-typeorm3-kit@^0.2.0:
-  version "0.2.0"
-  resolved "https://registry.npmjs.org/nestjs-typeorm3-kit/-/nestjs-typeorm3-kit-0.2.0.tgz#09b9cc62f1d10da2c96089559da433dd8481b362"
-  integrity sha512-yt1x9klT07/uSUWVWq140ai7B1tKUjdflo9FF2htmGRQKHioqmNXt15H4ZRf/yhjz16fKSO1C52cezaNbSZbvw==
+nestjs-typeorm3-kit@^0.2.1:
+  version "0.2.1"
+  resolved "https://registry.npmjs.org/nestjs-typeorm3-kit/-/nestjs-typeorm3-kit-0.2.1.tgz#2df8920f1cc9f072abcdc6be79017b8cb6d91b94"
+  integrity sha512-dmWuaZWTDBx42QyQt1zohhjcIW9kN/CVQQPhvWbXsxmNlXfka3hy0jtoOj1wo4ysaE/jjzC3h6Iukyi3pypWHQ==
   dependencies:
     fast-glob "^3.3.3"
 
