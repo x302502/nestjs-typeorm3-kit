@@ -18,11 +18,8 @@ export function DefController(options: ControllerOptions): ClassDecorator;
 export function DefController(
   options?: string | string[] | ControllerOptions,
 ): ClassDecorator {
-  const nestController =
-    options && !Array.isArray(options) && typeof options === 'object'
-      ? Controller(options)
-      : Controller(options as string | string[] | undefined);
-  return applyDecorators(ApiBearerAuth(), nestController);
+  // The cast only picks a Controller overload; it accepts all three forms at runtime.
+  return applyDecorators(ApiBearerAuth(), Controller(options as ControllerOptions));
 }
 
 export function DefGet(

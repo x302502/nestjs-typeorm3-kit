@@ -51,8 +51,42 @@ function isForwardReference(item: unknown): item is ForwardReference {
   return !!item && typeof item === 'object' && 'forwardRef' in item;
 }
 
-function scopeModule(moduleType: Type<object>, parentPath: string): Type<object> {
-  if (!parentPath) {
+/**
+ * Only modules that register controllers (directly or through their imports) need a
+ * per-prefix copy. Sharing the others keeps their providers singletons and avoids
+ * registering a @Global module twice.
+ */
+function hasRoutes(item: ModuleImport, seen = new Set<unknown>()): boolean {
+  if (!item || seen.has(item)) {
+    return false;
+  }
+  seen.add(item);
+  // Resolved later; scopeImport checks the resolved module again.
+  if (item instanceof Promise || isForwardReference(item)) {
+    return true;
+  }
+  const dynamic = isDynamicModule(item) ? item : undefined;
+  const moduleType = dynamic ? dynamic.module : (item as Type<object>);
+  const controllers = [
+    ...((Reflect.getMetadata('controllers', moduleType) as unknown[] | undefined) ?? []),
+    ...(dynamic?.controllers ?? []),
+  ];
+  if (controllers.length) {
+    return true;
+  }
+  const imports = [
+    ...((Reflect.getMetadata('imports', moduleType) as ModuleImport[] | undefined) ?? []),
+    ...(dynamic?.imports ?? []),
+  ];
+  return imports.some(child => hasRoutes(child, seen));
+}
+
+function scopeModule(
+  moduleType: Type<object>,
+  parentPath: string,
+  routed = hasRoutes(moduleType),
+): Type<object> {
+  if (!parentPath || !routed) {
     return moduleType;
   }
   let byPath = scopedModuleCache.get(moduleType);
@@ -101,7 +135,7 @@ function scopeModule(moduleType: Type<object>, parentPath: string): Type<object>
 }
 
 function scopeDynamicModule(item: DynamicModule, parentPath: string): DynamicModule {
-  if (!parentPath) {
+  if (!parentPath || !hasRoutes(item)) {
     return item;
   }
   let byPath = scopedDynamicCache.get(item);
@@ -117,7 +151,8 @@ function scopeDynamicModule(item: DynamicModule, parentPath: string): DynamicMod
   // Own string keys only: Nest's identity symbol on `item` must not be copied.
   const scoped = Object.fromEntries(Object.entries(item)) as DynamicModule;
   byPath.set(parentPath, scoped);
-  scoped.module = scopeModule(item.module, parentPath);
+  // Routes may come from the dynamic metadata, which the bare class does not carry.
+  scoped.module = scopeModule(item.module, parentPath, true);
   if (item.imports) {
     const importParentPath = (item as { [SCOPED_IMPORTS]?: boolean })[SCOPED_IMPORTS]
       ? parentPath

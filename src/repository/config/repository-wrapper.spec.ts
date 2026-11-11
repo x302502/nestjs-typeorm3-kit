@@ -123,10 +123,9 @@ describe("RepositoryWrapper.findOne guard", () => {
     expect(superFindOneMock).not.toHaveBeenCalled();
   });
 
-  it("delegates when a mapped column is explicitly null", async () => {
-    const opts = { where: { id: 1, name: null as never } };
-    await repo.findOne(opts);
-    expect(superFindOneMock).toHaveBeenCalledWith(opts);
+  it("returns null when a mapped column is null (TypeORM drops null by default)", async () => {
+    expect(await repo.findOne({ where: { id: 1, name: null as never } })).toBeNull();
+    expect(superFindOneMock).not.toHaveBeenCalled();
   });
 
   it("matches columns by propertyPath when present", async () => {

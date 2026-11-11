@@ -161,7 +161,7 @@ Route thành `/client/books`, `/client/authors`. Swagger group: `[Client] BookCo
 
 **Lỗi hay gặp**
 
-- Module được import có prefix riêng theo từng parent. Dùng cùng một child ở hai parent tạo hai module instance (và các provider tương ứng), không chia sẻ một provider instance giữa hai đường dẫn.
+- Module có đăng ký controller (trực tiếp hoặc qua các import của nó) được gắn prefix riêng theo từng parent: dùng cùng một child như vậy ở hai parent sẽ tạo hai module instance, và provider khai báo trong module đó được tạo một lần cho mỗi chỗ mount. Module không có controller (service, repository module, module `@Global`) được dùng chung nên provider vẫn là singleton — hãy đặt state dùng chung (cache, connection) trong một module không có route.
 - Muốn lọc Swagger theo `include: [ChildModuleClass]` trên nhiều prefix, dùng `createScopedSwaggerDocument` thay cho `SwaggerModule.createDocument`. Hàm gốc so sánh class identity nên bỏ sót bản mount đã scope; `include: [ParentModule]` với `deepScanRoutes: true` chỉ quét import trực tiếp.
 - `@Controller` thường (không có `@DefController`) vẫn được tag, nhưng không có yêu cầu Bearer auth.
 

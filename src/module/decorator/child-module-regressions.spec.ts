@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { forwardRef, INestApplication, Inject, Module, OnModuleInit, Type } from "@nestjs/common";
+import { forwardRef, Global, INestApplication, Inject, Module, OnModuleInit, Type } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ChildModule, DefController, DefGet, createScopedSwaggerDocument } from "../..";
@@ -223,6 +223,74 @@ describe("ChildModule scoping regressions", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ greeting: "hi" });
     });
+  });
+
+  it("shares route-less modules (plain, @Global, promised) across prefixes", async () => {
+    let created = 0;
+    class Cache {
+      id = ++created;
+    }
+    @Module({ providers: [Cache], exports: [Cache] })
+    class CacheModule {}
+
+    let globalCreated = 0;
+    @Global()
+    @Module({ providers: [{ provide: "CONFIG", useFactory: () => ++globalCreated }], exports: ["CONFIG"] })
+    class ConfigModule {}
+
+    let asyncCreated = 0;
+    class Repo {
+      id = ++asyncCreated;
+    }
+    @Module({})
+    class AsyncRepoModule {
+      static forRootAsync() {
+        return Promise.resolve({ module: AsyncRepoModule, providers: [Repo], exports: [Repo] });
+      }
+    }
+    @Module({ imports: [AsyncRepoModule.forRootAsync()], exports: [AsyncRepoModule] })
+    class RepoWrapperModule {}
+
+    const controllerFor = (path: string) => {
+      @DefController(path)
+      class SharedController {
+        constructor(
+          @Inject(Cache) private readonly cache: Cache,
+          @Inject(Repo) private readonly repo: Repo,
+          @Inject("CONFIG") private readonly config: number,
+        ) {}
+        @DefGet()
+        get() {
+          return { cache: this.cache.id, repo: this.repo.id, config: this.config };
+        }
+      }
+      return SharedController;
+    };
+
+    @ChildModule({
+      prefix: "a",
+      imports: [CacheModule, ConfigModule, RepoWrapperModule],
+      controllers: [controllerFor("x")],
+    })
+    class AModule {}
+    @ChildModule({
+      prefix: "b",
+      imports: [CacheModule, ConfigModule, RepoWrapperModule],
+      controllers: [controllerFor("x")],
+    })
+    class BModule {}
+
+    @Module({ imports: [AModule, BModule] })
+    class AppModule {}
+
+    await withApp(AppModule, async (_app, url) => {
+      for (const prefix of ["a", "b"]) {
+        const response = await fetch(`${url}/${prefix}/x`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ cache: 1, repo: 1, config: 1 });
+      }
+    });
+    expect([created, globalCreated, asyncCreated]).toEqual([1, 1, 1]);
   });
 
   it("documents child routes when the parent is included with deepScanRoutes", async () => {

@@ -9,6 +9,11 @@ const API_TAGS = "swagger/apiUseTags";
 const importsOf = (moduleType: Function) => Reflect.getMetadata("imports", moduleType) as unknown[];
 const exportsOf = (moduleType: Function) => Reflect.getMetadata("exports", moduleType) as unknown[];
 const pathOf = (moduleType: unknown) => Reflect.getMetadata(MODULE_PATH, moduleType as Function);
+const routeController = () => {
+  @DefController("route")
+  class RouteController {}
+  return RouteController;
+};
 
 describe("ChildModule metadata", () => {
   it("accepts no metadata and registers an empty path", () => {
@@ -58,7 +63,7 @@ describe("ChildModule metadata", () => {
   });
 
   it("scopes imported modules under the prefix and reuses one copy per path", () => {
-    @ChildModule({ prefix: "leaf" })
+    @ChildModule({ prefix: "leaf", controllers: [routeController()] })
     class Leaf {}
     const dynamic: DynamicModule = { module: Leaf, providers: [] };
 
@@ -85,10 +90,25 @@ describe("ChildModule metadata", () => {
     expect(pathOf(importsOf(Third)[0])).toBe("/other/leaf");
   });
 
+  it("keeps route-less modules shared instead of scoping them", () => {
+    @Module({})
+    class Shared {}
+    const dynamic: DynamicModule = { module: Shared, providers: [] };
+    @Module({ imports: [Shared] })
+    class Wrapper {}
+
+    @ChildModule({ prefix: "api", imports: [Shared, dynamic, Wrapper], exports: [Shared] })
+    class Parent {}
+
+    expect(importsOf(Parent)).toEqual([Shared, dynamic, Wrapper]);
+    expect(importsOf(Parent)[1]).toBe(dynamic);
+    expect(exportsOf(Parent)).toEqual([Shared]);
+  });
+
   it("rewrites exports of imported modules to their scoped copies", () => {
-    @Module({})
+    @Module({ controllers: [routeController()] })
     class ClassModule {}
-    @Module({})
+    @Module({ controllers: [routeController()] })
     class DynamicTarget {}
     @Module({})
     class NotImported {}
@@ -113,7 +133,7 @@ describe("ChildModule metadata", () => {
   });
 
   it("resolves forward-referenced exports lazily", () => {
-    @Module({})
+    @Module({ controllers: [routeController()] })
     class Lazy {}
     @Module({})
     class Unrelated {}

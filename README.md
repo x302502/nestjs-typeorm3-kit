@@ -23,7 +23,7 @@ This package is also a **wrapper fork of [`typeorm-transactional`](https://githu
 
 - 🧩 `@DefEntityRepository` + `@InjectRepo` — repository pattern with multi-DataSource support
 - 🔁 `@DefTransaction` — decorator-based transactions, works on Node **and** Bun
-- 🛡️ `RepositoryWrapper` — hardens `findOne` against TypeORM's "first row on undefined where" footgun
+- 🛡️ `RepositoryWrapper` — hardens `findOne`, `findOneBy` and their `*OrFail` variants against TypeORM's "first row on undefined where" footgun
 - 🎯 `@DefController`, `@DefGet/Post/Put/Patch/Delete` — less boilerplate, auto Swagger metadata
 - 🌳 `@ChildModule` — nested route prefixes + auto `ApiTags`
 - 📜 `configSwaggerDocument` — merges `class-validator` metadata into the OpenAPI doc
@@ -257,7 +257,7 @@ export class BookRepo extends RepositoryWrapper<Book> {
 }
 ```
 
-> ✨ Extending `RepositoryWrapper` instead of plain `Repository` makes `findOne` return `null` (instead of a random first row) when the `where` clause has any `undefined` value. See [`RepositoryWrapper`](#repositorywrapper).
+> ✨ Extending `RepositoryWrapper` instead of plain `Repository` makes `findOne` / `findOneBy` return `null` (instead of a random first row) when the `where` clause has any `undefined` value. See [`RepositoryWrapper`](#repositorywrapper).
 
 ### 3.3 Wire the repository module
 
@@ -541,14 +541,14 @@ For the default connection you can also use plain constructor injection (`readon
 
 ### `RepositoryWrapper`
 
-`TypeOrmRepository.findOne({ where: { id: undefined } })` silently strips `undefined` and returns the **first row of the table** — a footgun that can cause data leaks or auth bypasses.
+`TypeOrmRepository.findOne({ where: { id: undefined } })` silently strips `undefined` — and, by default, `null` too — and returns the **first row of the table**: a footgun that can cause data leaks or auth bypasses. Use `IsNull()` to match SQL `NULL`.
 
-`RepositoryWrapper` overrides `findOne` to return `null` when:
+`RepositoryWrapper` overrides `findOne` and `findOneBy` to return `null`, and `findOneOrFail` / `findOneByOrFail` to throw `EntityNotFoundError`, when:
 
 - `options` is missing or not an object
 - `options.where` is falsy or not an object
 - `where` is empty (`{}`, `[]`, or an OR branch with `{}`)
-- any mapped column or relation/embedded predicate in `where` has an `undefined` value or an empty nested condition
+- any mapped column or relation/embedded predicate in `where` is `undefined` or `null`, or has an empty nested condition
 
 ```ts
 export class BaseRepo<Entity> extends RepositoryWrapper<Entity> {}
@@ -560,6 +560,21 @@ await bookRepo.findOne({ where: { id: undefined } }); // → null (safe)
 await bookRepo.findOne({ where: {} });                // → null (no filter)
 await bookRepo.findOne({ where: { author: { id: undefined } } }); // → null
 await bookRepo.findOne({ where: { id: 1 } });          // → Book | null
+await bookRepo.findOneBy({ id: undefined });           // → null
+await bookRepo.findOneByOrFail({ id: undefined });     // → throws EntityNotFoundError
+await bookRepo.findOneBy({ authorId: null });          // → null (use IsNull() to match NULL)
+```
+
+The guard follows the DataSource's `invalidWhereValuesBehavior`: with `null: "sql-null"` a `null` value is passed through as `IS NULL`, and with `"throw"` TypeORM's own error is left to surface.
+
+Multi-row methods (`find`, `findBy`, `count`, `exists`, …) and `update`/`delete` are **not** guarded by the wrapper: `findBy({ id: undefined })` matches every row. To cover every method, make TypeORM throw instead:
+
+```ts
+// TypeORM >= 0.3.27: fail loudly instead of dropping the condition, for every method
+new DataSource({
+  // ...
+  invalidWhereValuesBehavior: { undefined: "throw", null: "throw" },
+});
 ```
 
 ---
@@ -697,9 +712,12 @@ Mounts a module under a route prefix, auto-tags its controllers in Swagger as `[
 export class ClientModule {}
 ```
 
-An imported child can be mounted under different parent prefixes. Each mount
-has its own module instance and providers; the child class's original route
-metadata is not overwritten.
+An imported child can be mounted under different parent prefixes. Modules that
+register controllers (directly or through their imports) get one copy per
+prefix, so their own providers are instantiated once per mount; the child
+class's original route metadata is not overwritten. Modules without controllers
+(services, repository modules, `@Global` modules) are shared as-is, so their
+providers stay singletons. Keep shared state in such a route-less module.
 
 When selecting Swagger routes with `include: [ChildModuleClass]`, use
 `createScopedSwaggerDocument` instead of `SwaggerModule.createDocument` to
@@ -869,7 +887,7 @@ Upgrade to **v0.2.0+**. The vendored fork dropped `cls-hooked` entirely and uses
 <details>
 <summary><b><code>findOne</code> returns <code>null</code> for a query I expect to work</b></summary>
 
-That's the `RepositoryWrapper` guard at work — one of the values passed in `where` is `undefined`. Either provide a real value or an `IsNull()`/`Not()` clause. If you need raw TypeORM behaviour, use `Repository` instead of `RepositoryWrapper`.
+That's the `RepositoryWrapper` guard at work — one of the values passed in `where` is `undefined` or `null` (TypeORM would drop it and match any row). Either provide a real value or an `IsNull()`/`Not()` clause. If you need raw TypeORM behaviour, use `Repository` instead of `RepositoryWrapper`.
 
 </details>
 
